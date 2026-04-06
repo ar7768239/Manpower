@@ -229,7 +229,7 @@ input[type=number]{width:80px; padding: 5px;}
     </div>
 </div>
 
-<footer>© 2026 Bharat Heavy Electricals Limited</footer>
+<footer>© 2026 Bharat Heavy Electricals Limited | Deployed By AADHVI Technologies</footer>
 
 <script>
 const adminUser="admin", adminPass="admin123";
