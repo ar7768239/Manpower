@@ -1,10 +1,3 @@
-const express = require('express');
-const app = express();
-const path = require('path');
-const port = process.env.PORT || 3000;
-
-// This serves your original HTML/CSS/JS exactly as you wrote it
-const htmlContent = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -60,7 +53,8 @@ nav a:hover{text-decoration:underline}
 .hero-page.active { display: flex; padding: 0; } 
 
 /* Components */
-.profile-icon {width: 35px; height: 35px; background: #1e90ff; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; margin-left: 20px; text-transform: uppercase; border: 2px solid #fff; cursor: default;}
+.profile-icon {width: 35px; height: 35px; background: #1e90ff; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; margin-left: 20px; text-transform: uppercase; border: 2px solid #fff; cursor: pointer; overflow: hidden;}
+.profile-icon img { width: 100%; height: 100%; object-fit: cover; }
 .upload-box{background:white; padding:40px; width:600px; margin:40px auto; text-align:center; border-radius:8px; color: #333; box-shadow: 0 4px 6px rgba(0,0,0,0.1);}
 table{width:100%;border-collapse:collapse;margin-top:10px; background: white;}
 th,td{border:1px solid #ccc;padding:10px;text-align:center; min-width: 100px; color: #333;}
@@ -84,6 +78,9 @@ input[type=number]{width:80px; padding: 5px;}
 .modal-box{background:white;padding:25px;width:350px;border-radius:8px;display:flex;flex-direction:column;align-items:center; color: #333;}
 .modal-box img.modal-logo { height: 60px; margin-bottom: 15px; }
 .modal-box input, .modal-box select{width:100%;padding:8px;margin-bottom:10px}
+
+/* Profile Modal Specifics */
+#profileImagePreview { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin-bottom: 10px; border: 2px solid #1e90ff; }
 
 /* Drive/Project Section */
 .drive-box{background:white;border-radius:8px;padding:20px;min-height:200px; color: #333;}
@@ -202,6 +199,22 @@ input[type=number]{width:80px; padding: 5px;}
     </div>
 </div>
 
+<div id="profileModal" class="modal">
+    <div class="modal-box">
+        <h3>User Profile</h3>
+        <img id="profileImagePreview" src="" style="display:none">
+        <p style="font-size: 12px; color: #666;">Update Profile Picture</p>
+        <input type="file" id="profilePicInput" accept="image/*" onchange="previewProfilePic(this)">
+        
+        <hr style="width: 100%; margin: 15px 0;">
+        
+        <p style="font-size: 12px; color: #666; text-align: left; width: 100%;">Change Password (Employee ID)</p>
+        <input type="password" id="newPass" placeholder="Enter New Password">
+        <button class="btn" onclick="updateProfile()">Update Profile</button>
+        <button class="btn secondary" onclick="closeModals()">Close</button>
+    </div>
+</div>
+
 <div id="sheetSelectionModal" class="modal">
     <div class="modal-box">
         <h3>Select Excel Sheets</h3>
@@ -229,7 +242,7 @@ input[type=number]{width:80px; padding: 5px;}
     </div>
 </div>
 
-<footer>© 2026 Bharat Heavy Electricals Limited | Deployed By AADHVI Technologies</footer>
+<footer>© 2026 Bharat Heavy Electricals Limited</footer>
 
 <script>
 const adminUser="admin", adminPass="admin123";
@@ -249,6 +262,59 @@ function saveUserLogin(u,s){
 
 function openSignIn(){ closeModals(); signInModal.classList.add("active"); }
 function openLogin(){ closeModals(); loginModal.classList.add("active"); }
+
+function openProfileModal() {
+    closeModals();
+    const preview = document.getElementById("profileImagePreview");
+    if(localStorage.profilePic) {
+        preview.src = localStorage.profilePic;
+        preview.style.display = "block";
+    } else {
+        preview.style.display = "none";
+    }
+    profileModal.classList.add("active");
+}
+
+function previewProfilePic(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const preview = document.getElementById("profileImagePreview");
+            preview.src = e.target.result;
+            preview.style.display = "block";
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+function updateProfile() {
+    const newPassword = document.getElementById("newPass").value;
+    const preview = document.getElementById("profileImagePreview");
+
+    if(newPassword) {
+        localStorage.empId = newPassword;
+        alert("Password updated successfully!");
+    }
+    
+    if(preview.src && preview.src.startsWith("data:image")) {
+        localStorage.profilePic = preview.src;
+    }
+
+    closeModals();
+    updateNavUI(); // Refresh the icon in nav
+}
+
+function updateNavUI() {
+    const user = localStorage.empUser || "User";
+    const profileIcon = document.querySelector(".profile-icon");
+    if(profileIcon) {
+        if(localStorage.profilePic) {
+            profileIcon.innerHTML = `<img src="${localStorage.profilePic}">`;
+        } else {
+            profileIcon.innerHTML = user.charAt(0).toUpperCase();
+        }
+    }
+}
 
 function closeModals(){
     document.querySelectorAll('.modal').forEach(m=>m.classList.remove("active"));
@@ -270,6 +336,7 @@ function clearAuthInputs(){
 
 function createAccount(){
     localStorage.empUser=siUser.value; localStorage.empId=siId.value;
+    localStorage.removeItem("profilePic"); // Reset profile pic for new account
     alert("Account Created"); clearAuthInputs(); closeModals();
 }
 
@@ -278,13 +345,16 @@ function login(){
     if(u===adminUser && p===adminPass){
         currentRole = 'admin';
         authNav.style.display="none";
-        dashNav.innerHTML=\`<a onclick="showPage('adminDashboard')">Dashboard</a><a onclick="openUserStatus()">User Status</a><a onclick="openProjectPage('admin')">Project Data</a><a onclick="logout()">Logout</a><div class="profile-icon" title="ADMIN">\${u.charAt(0)}</div>\`;
+        dashNav.innerHTML=`<a onclick="showPage('adminDashboard')">Dashboard</a><a onclick="openUserStatus()">User Status</a><a onclick="openProjectPage('admin')">Project Data</a><a onclick="logout()">Logout</a><div class="profile-icon" title="ADMIN" onclick="openProfileModal()">${u.charAt(0)}</div>`;
         dashNav.style.display="flex"; clearAuthInputs(); closeModals(); showPage("adminDashboard"); return;
     }
     if(u===localStorage.empUser && p===localStorage.empId){
         currentRole = 'user';
         saveUserLogin(u,"Success"); authNav.style.display="none";
-        dashNav.innerHTML=\`<a onclick="showPage('dashboard')">Dashboard</a><a onclick="openManpower()">Manpower Allocation</a><a onclick="openProjectPage('user')">Project Data</a><a onclick="logout()">Logout</a><div class="profile-icon" title="\${u}">\${u.charAt(0)}</div>\`;
+        
+        let iconContent = localStorage.profilePic ? `<img src="${localStorage.profilePic}">` : u.charAt(0).toUpperCase();
+        
+        dashNav.innerHTML=`<a onclick="showPage('dashboard')">Dashboard</a><a onclick="openManpower()">Manpower Allocation</a><a onclick="openProjectPage('user')">Project Data</a><a onclick="logout()">Logout</a><div class="profile-icon" title="${u}" onclick="openProfileModal()">${iconContent}</div>`;
         dashNav.style.display="flex"; clearAuthInputs(); closeModals(); showPage("dashboard");
     } else { saveUserLogin(u,"Failed"); alert("Invalid Credentials"); }
 }
@@ -292,8 +362,8 @@ function login(){
 function openUserStatus(){
     showPage("userStatus");
     let logs=JSON.parse(localStorage.getItem("loginLogs"))||[];
-    let h=\`<tr><th>Username</th><th>Date & Time</th><th>Status</th></tr>\`;
-    logs.forEach(l=>{ h+=\`<tr><td>\${l.user}</td><td>\${l.time}</td><td>\${l.status}</td></tr>\`});
+    let h=`<tr><th>Username</th><th>Date & Time</th><th>Status</th></tr>`;
+    logs.forEach(l=>{ h+=`<tr><td>${l.user}</td><td>${l.time}</td><td>${l.status}</td></tr>`});
     loginTable.innerHTML=h;
 }
 
@@ -341,8 +411,8 @@ function uploadExcel(){
 }
 
 function renderTable(){
-    let h=\`<tr><th>Select</th><th>Area</th><th>Current Manpower</th><th>Allocation %</th><th>Updated Manpower</th></tr>\`;
-    excelData.forEach((r,i)=>{ h+=\`<tr><td><input type="checkbox" onchange="excelData[\${i}].selected=this.checked"></td><td>\${r.Area || 'N/A'}</td><td>\${r.Manpower || 0}</td><td><input type="number" value="100" onchange="calc(\${i},this.value)"></td><td id="u\${i}">\${r.updated}</td></tr>\`;});
+    let h=`<tr><th>Select</th><th>Area</th><th>Current Manpower</th><th>Allocation %</th><th>Updated Manpower</th></tr>`;
+    excelData.forEach((r,i)=>{ h+=`<tr><td><input type="checkbox" onchange="excelData[${i}].selected=this.checked"></td><td>${r.Area || 'N/A'}</td><td>${r.Manpower || 0}</td><td><input type="number" value="100" onchange="calc(${i},this.value)"></td><td id="u${i}">${r.updated}</td></tr>`;});
     dataTable.innerHTML=h;
 }
 function calc(i,v){ excelData[i].updated=Math.round((excelData[i].Manpower || 0)*v/100); document.getElementById("u"+i).innerText=excelData[i].updated; }
@@ -351,7 +421,6 @@ function generateExcel(){
     allocatedManpowerData = excelData.filter(r=>r.selected).map(r=>({Area:r.Area, Manpower:r.updated}));
     if(allocatedManpowerData.length === 0) { alert("No rows selected in Manpower Allocation"); return; }
     
-    // Use captured WBS from project selection if available
     let horizontalRow = { "SL no.": 1, "WBS ": (capturedWBS || "N/A").toUpperCase() }; 
     allocatedManpowerData.forEach(item => {
         horizontalRow[item.Area] = item.Manpower;
@@ -384,7 +453,7 @@ function renderGlobalFileList(role){
             let cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = file.tempSelected;
             cb.onchange = function() { file.tempSelected = this.checked; }; leftSide.appendChild(cb);
         }
-        let nameSpan = document.createElement("span"); nameSpan.innerText = \`📄 \${file.name}\`;
+        let nameSpan = document.createElement("span"); nameSpan.innerText = `📄 ${file.name}`;
         leftSide.appendChild(nameSpan); li.appendChild(leftSide);
         let div = document.createElement("div"); let viewBtn=document.createElement("button"); viewBtn.innerText="View";
         viewBtn.onclick=function(){
@@ -404,7 +473,7 @@ function renderGlobalFileList(role){
             } else {
                 reader.onload = function(e){
                     document.getElementById("selectorArea").style.display = "none";
-                    document.getElementById("previewContainer").innerHTML = \`<iframe src="\${e.target.result}" style="width:100%; height:100%; border:none;"></iframe>\`;
+                    document.getElementById("previewContainer").innerHTML = `<iframe src="${e.target.result}" style="width:100%; height:100%; border:none;"></iframe>`;
                     document.getElementById("previewModal").classList.add("active");
                 };
                 reader.readAsDataURL(file);
@@ -428,7 +497,7 @@ async function submitProjectSelection() {
         if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
             excelFilesFound = true; const data = await file.arrayBuffer(); const workbook = XLSX.read(data, { type: 'array' });
             const div = document.createElement("div"); div.style.marginBottom = "15px";
-            div.innerHTML = \`<label style="font-size:13px; font-weight:bold">\${file.name}</label><br>\`;
+            div.innerHTML = `<label style="font-size:13px; font-weight:bold">${file.name}</label><br>`;
             const select = document.createElement("select"); select.style.marginTop = "5px";
             workbook.SheetNames.forEach(name => { const opt = document.createElement("option"); opt.value = name; opt.innerText = name; select.appendChild(opt); });
             div.appendChild(select); container.appendChild(div);
@@ -459,20 +528,20 @@ async function finalizeProjectSubmission() {
     if(allocatedManpowerData.length === 0) {
         allocatedManpowerData = excelData.filter(r=>r.selected).map(r=>({Area:r.Area, Manpower:r.updated}));
     }
-    combinedHtml += \`<div class="summary-card"><h3>Step: Select WBS Rows</h3><p>Select specific rows to capture **WBS ** and distribute panels.</p></div>\`;
+    combinedHtml += `<div class="summary-card"><h3>Step: Select WBS Rows</h3><p>Select specific rows to capture **WBS ** and distribute panels.</p></div>`;
     for (let file of finalSelectedFiles) {
         if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
             const data = await file.arrayBuffer(); const workbook = XLSX.read(data, { type: 'array' });
             const sheetName = file.selectedSheet || workbook.SheetNames[0];
             const sheet = workbook.Sheets[sheetName];
             let htmlTable = XLSX.utils.sheet_to_html(sheet);
-            combinedHtml += \`<h3 style="background:#f1f5f9; padding:12px; border-left:5px solid #1e90ff; margin-top:20px;">\${file.name}</h3>\`;
+            combinedHtml += `<h3 style="background:#f1f5f9; padding:12px; border-left:5px solid #1e90ff; margin-top:20px;">${file.name}</h3>`;
             let styledTable = htmlTable.replace('<table>', '<table class="selection-table" style="border-collapse:collapse; width:100%; margin-bottom:20px;">')
                                        .replaceAll('<td>', '<td style="border:1px solid #ccc; padding:8px; text-align:center;">')
                                        .replaceAll('<th>', '<th style="border:1px solid #ccc; padding:10px; background:#1e90ff; color:white;">');
             styledTable = styledTable.replace(/<tr>/g, '<tr><td style="border:1px solid #ccc; width:40px; text-align:center;"><input type="checkbox" class="preview-cb"></td>');
             styledTable = styledTable.replace(/<tr>/, '<tr><th style="background:#1e90ff; color:white; width:40px;">Select</th>');
-            combinedHtml += \`<div style="overflow-x:auto;">\${styledTable}</div>\`;
+            combinedHtml += `<div style="overflow-x:auto;">${styledTable}</div>`;
         }
     }
     document.getElementById("previewTitle").innerText = "WBS Row Selection";
@@ -496,7 +565,6 @@ async function finalizeProjectSubmission() {
             headerCells.forEach((cell, idx) => {
                 const text = cell.innerText.trim().toLowerCase();
                 if((text.includes('panel') || text.includes('qty')) && !text.includes('id') && !text.includes('code')) panelColIdx = idx;
-                // Identify the WBS column
                 if(text.includes('wbs')) wbsColIdx = idx;
             });
 
@@ -506,13 +574,10 @@ async function finalizeProjectSubmission() {
                 if(checkbox && checkbox.checked) {
                     selectedRowsHtml += row.outerHTML;
                     const cells = row.querySelectorAll('td');
-                    
-                    // Logic to capture the WBS string (e.g., CE/1804-SH2-48-01)
                     if(!capturedWBS) {
                         if(wbsColIdx !== -1 && cells[wbsColIdx]) {
                             capturedWBS = cells[wbsColIdx].innerText.trim().toUpperCase();
                         } else {
-                            // Fallback: search for cells containing "/" and "-"
                             for(let j=1; j<cells.length; j++){
                                 let cellText = cells[j].innerText.trim();
                                 if(cellText.includes('/') && cellText.includes('-')){
@@ -522,7 +587,6 @@ async function finalizeProjectSubmission() {
                             }
                         }
                     }
-
                     let panelValue = 0;
                     if(panelColIdx !== -1 && cells[panelColIdx]) {
                         panelValue = parseFloat(cells[panelColIdx].innerText.replace(/[^0-9.]/g, '')) || 0;
@@ -541,39 +605,33 @@ async function finalizeProjectSubmission() {
         });
 
         if(totalPanelsFromWBS === 0) { alert("Error: No panel count found in the selected rows."); return; }
-        
         const totalManpower = allocatedManpowerData.reduce((sum, item) => sum + item.Manpower, 0);
         finalDistributedData = []; 
-        
-        let finalReport = \`<h2>Final Submission Report</h2>
+        let finalReport = `<h2>Final Submission Report</h2>
         <div class="summary-card">
-            <p><b>Respective WBS :</b> \${capturedWBS || "N/A"}</p>
-            <p><b>Total Panels (Selected Rows):</b> \${totalPanelsFromWBS}</p>
-            <p><b>Total Manpower:</b> \${totalManpower}</p>
+            <p><b>Respective WBS :</b> ${capturedWBS || "N/A"}</p>
+            <p><b>Total Panels (Selected Rows):</b> ${totalPanelsFromWBS}</p>
+            <p><b>Total Manpower:</b> ${totalManpower}</p>
         </div>
         <table style="width:100%; border-collapse:collapse;">
-            <tr><th>Area</th><th>Manpower</th><th>Distributed Panels</th></tr>\`;
+            <tr><th>Area</th><th>Manpower</th><th>Distributed Panels</th></tr>`;
         
         allocatedManpowerData.forEach(area => {
             let dist = totalManpower > 0 ? Math.round((area.Manpower / totalManpower) * totalPanelsFromWBS) : 0;
             finalDistributedData.push({ "Area": area.Area, "Manpower": area.Manpower, "Distributed Panels": dist });
-            finalReport += \`<tr><td>\${area.Area}</td><td>\${area.Manpower}</td><td><b style="color:#1e90ff">\${dist}</b></td></tr>\`;
+            finalReport += `<tr><td>${area.Area}</td><td>${area.Manpower}</td><td><b style="color:#1e90ff">${dist}</b></td></tr>`;
         });
-        finalReport += \`</table><br><h3>Data Preview of Selected Rows</h3><table style="width:100%; border-collapse:collapse;">\${selectedRowsHtml}</table>\`;
-        
+        finalReport += `</table><br><h3>Data Preview of Selected Rows</h3><table style="width:100%; border-collapse:collapse;">${selectedRowsHtml}</table>`;
         document.getElementById("previewContainer").innerHTML = finalReport;
         
         if(!document.getElementById("dynamicDownloadBtn")){
             const dBtn = document.createElement("button");
             dBtn.id = "dynamicDownloadBtn";
-            dBtn.className = "btn";
-            dBtn.style.width = "auto";
-            dBtn.style.background = "#10b981";
+            dBtn.className = "btn"; dBtn.style.width = "auto"; dBtn.style.background = "#10b981";
             dBtn.innerText = "⬇ Download Final Distribution";
             dBtn.onclick = downloadFinalReport;
             document.getElementById("previewActionArea").prepend(dBtn);
         }
-
         closeBtn.innerText = "Confirm & Finish";
         closeBtn.onclick = function() { alert("Data finalized successfully."); closeModals(); showPage('dashboard'); };
     };
@@ -583,12 +641,3 @@ async function finalizeProjectSubmission() {
 </script>
 </body>
 </html>
-`;
-
-app.get('/', (req, res) => {
-    res.send(htmlContent);
-});
-
-app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
-});
